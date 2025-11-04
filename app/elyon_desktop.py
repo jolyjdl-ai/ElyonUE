@@ -6,26 +6,35 @@
 - Thread-safe: callbacks UI via QTimer.singleShot(0, ...)
 """
 import json, os, sys, threading
-import httpx
+import requests
 from PySide6 import QtWidgets
-from PySide6.QtCore import Qt, QEvent, QTimer, Signal
-from PySide6.QtGui import QColor, QPalette, QTextCursor
+from PySide6.QtCore import Qt, QEvent, QTimer, Signal, QUrl
+from PySide6.QtGui import QColor, QPalette, QTextCursor, QDesktopServices
 
 API = os.environ.get("ELYON_API_URL", "http://127.0.0.1:8000")
+WEB_UI = os.environ.get("ELYON_WEB_URL", API.rstrip("/") + "/ui")
 
 # --------------------- HTTP utils ---------------------
 def http_get(path, timeout=5.0):
     try:
-        with httpx.Client(timeout=timeout) as cli:
-            r = cli.get(API + path); r.raise_for_status(); return r.json()
-    except Exception:
+        r = requests.get(API + path, timeout=timeout)
+        r.raise_for_status()
+        data = r.json()
+        print(f"[desktop] GET {path} -> ok", flush=True)
+        return data
+    except Exception as exc:
+        print(f"[desktop] GET {path} -> erreur {exc}", flush=True)
         return None
 
 def http_post(path, payload, timeout=20.0):
     try:
-        with httpx.Client(timeout=timeout) as cli:
-            r = cli.post(API + path, json=payload); r.raise_for_status(); return r.json()
-    except Exception:
+        r = requests.post(API + path, json=payload, timeout=timeout)
+        r.raise_for_status()
+        data = r.json()
+        print(f"[desktop] POST {path} -> ok", flush=True)
+        return data
+    except Exception as exc:
+        print(f"[desktop] POST {path} -> erreur {exc}", flush=True)
         return None
 
 # --------------------- Widgets ---------------------
@@ -65,7 +74,8 @@ class ChatPanel(QtWidgets.QWidget):
         if obj is self.input and ev.type() == QEvent.Type.KeyPress:
             modifiers = ev.modifiers()
             shortcut = Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier
-            if (ev.key() in (Qt.Key_Return, Qt.Key_Enter)) and (modifiers & shortcut):
+            valid_keys = (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            if (ev.key() in valid_keys) and (modifiers & shortcut):
                 self.on_send(); return True
         return super().eventFilter(obj, ev)
 
@@ -155,6 +165,11 @@ class StatusPanel(QtWidgets.QWidget):
 
 # --------------------- Main ---------------------
 class MainWindow(QtWidgets.QMainWindow):
+    replyReady = Signal(str, str)
+    controlReady = Signal(float)
+    selfReady = Signal(dict)
+    eventsReady = Signal(list)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ÉlyonEU — Desktop"); self.resize(1100, 720)
@@ -170,6 +185,9 @@ class MainWindow(QtWidgets.QMainWindow):
         header = QtWidgets.QHBoxLayout()
         title = QtWidgets.QLabel("<b>ÉlyonEU</b> — Chat + Moniteur"); title.setStyleSheet("color:#e5e7eb;")
         header.addWidget(title); header.addStretch(1)
+        self.btnOpenWeb = QtWidgets.QPushButton("Console web")
+        self.btnOpenWeb.clicked.connect(self.open_web_ui)
+        header.addWidget(self.btnOpenWeb)
         lay.addLayout(header); lay.addWidget(self.splitter, 1)
         self.setCentralWidget(central)
 
@@ -186,6 +204,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.stat.pauseRequested.connect(self.on_pause)
         self.stat.resumeRequested.connect(self.on_resume)
         self.stat.intervalSetRequested.connect(self.on_set_interval)
+
+        self.replyReady.connect(self._apply_reply)
+        self.controlReady.connect(self.stat.set_interval)
+        self.selfReady.connect(self.stat.set_self)
+        self.eventsReady.connect(self.stat.set_events)
 
         # first load
         self.chat.add_assistant("Bonjour, je suis ÉlyonEU. Décris-moi ta situation pour que je t'aide à l'étape suivante.")
@@ -232,7 +255,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 reply = f"(erreur locale) {exc}"
                 provider = "ui"
             finally:
-                QTimer.singleShot(0, lambda r=reply, p=provider: (self.chat.add_assistant(r), self.chat.set_busy(False, p)))
+                print(f"[desktop] chat <- {provider} / {len(reply)} car.", flush=True)
+                self.replyReady.emit(reply, provider)
 
         threading.Thread(target=_work, daemon=True).start()
 
@@ -241,21 +265,21 @@ class MainWindow(QtWidgets.QMainWindow):
         def _work() -> None:
             j = http_get("/control") or {}
             iv = float(j.get("interval_sec", 1.5) or 1.5)
-            QTimer.singleShot(0, lambda ivv=iv: self.stat.set_interval(ivv))
+            self.controlReady.emit(iv)
 
         threading.Thread(target=_work, daemon=True).start()
 
     def refresh_self(self) -> None:
         def _work() -> None:
             j = http_get("/self") or {}
-            QTimer.singleShot(0, lambda jj=j: self.stat.set_self(jj))
+            self.selfReady.emit(j)
 
         threading.Thread(target=_work, daemon=True).start()
 
     def refresh_events(self) -> None:
         def _work() -> None:
             arr = (http_get("/events") or {}).get("events") or []
-            QTimer.singleShot(0, lambda a=arr: self.stat.set_events(a))
+            self.eventsReady.emit(arr)
 
         threading.Thread(target=_work, daemon=True).start()
 
@@ -275,6 +299,19 @@ class MainWindow(QtWidgets.QMainWindow):
             left = max(400, int(self.width() * 0.6))
             right = max(320, int(self.width() * 0.4))
             self.splitter.setSizes([left, right])
+
+    def _apply_reply(self, text: str, provider: str) -> None:
+        self.chat.add_assistant(text)
+        self.chat.set_busy(False, provider)
+
+    def open_web_ui(self) -> None:
+        url = QUrl(WEB_UI)
+        if not url.isValid():
+            print(f"[desktop] URL web invalide: {WEB_UI}", flush=True)
+            return
+        ok = QDesktopServices.openUrl(url)
+        if not ok:
+            print(f"[desktop] ouverture navigateur échouée pour {WEB_UI}", flush=True)
 
 # --------------------- Entrée ---------------------
 def main():

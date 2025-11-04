@@ -11,17 +11,3 @@ Content-Type: application/json
 		{ "role": "user", "content": "Fais un résumé en 3 points" }
 	]
 }
-
-### Rebuild UI (démo)
-POST http://localhost:8000/ui/rebuild
-Content-Type: application/json
-
-{
-	"specification": {
-		"title": "Dashboard",
-		"components": [
-			{ "type": "card", "title": "Tâches", "metric": "3" },
-			{ "type": "chart", "title": "Progression" }
-		]
-	}
-}

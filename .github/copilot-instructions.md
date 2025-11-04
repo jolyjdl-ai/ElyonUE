@@ -6,7 +6,7 @@
 
 ### Vue d'Ensemble
 - Application local-first avec gouvernance 6S/6R
-- Architecture modulaire évolutive : API FastAPI + UIs légères + Journalisation locale
+- Architecture modulaire : API FastAPI + interface desktop PySide6 + console web légère
 - Données strictement locales, pas de sorties non autorisées
 - Structure extensible prévue pour ajouts futurs de composants majeurs
 
@@ -16,13 +16,13 @@
    - Gère les événements et la journalisation
    - Configuration via `config/*.json`
 
-2. **Interfaces Utilisateur** (`ui/*/index.html`)
-   - Multiple profils : normal, divine, chat, moniteur
-   - Communication exclusivement via l'API locale
+2. **Console Web** (`ui/chat/index.html`)
+   - Unique UI navigateur servie par `/` ou `/ui`
+   - Inclut chat, état et contrôle heartbeat
 
-3. **Applications** (`app/`)
-   - Desktop Qt (`elyon_desktop.py`) : chat + moniteur intégrés
-   - TUI (`elyon_tui.py`) : interface console
+3. **Application Desktop** (`app/elyon_desktop.py`)
+   - PySide6 : chat + moniteur temps réel dans un seul client
+   - Bouton intégré pour ouvrir la console web locale
 
 4. **Moniteur** (`monitor/elyon_monitor.py`)
    - Surveillance type "mainframe"
@@ -37,14 +37,14 @@
 
 ### Démarrage Rapide
 ```powershell
-# Installation environnement virtuel + dépendances
-.\scripts\Start-ElyonEU.ps1
+scripts\Start-ElyonEU.bat
 ```
+> Options utiles : `--with-browser` pour ouvrir la console web, `--no-desktop` pour ne lancer que l'API.
 
 ### Points d'Accès
 - API : http://127.0.0.1:8000
 - Documentation API : http://127.0.0.1:8000/docs
-- UIs : http://127.0.0.1:8000/ui/{normal,divine,chat,moniteur}
+- Console web : http://127.0.0.1:8000/ui
 
 ### Conventions
 - Encodage UTF-8 strict
@@ -62,10 +62,9 @@
 - Dossier `extensions/` préparé pour modules additionnels
 - Structure de données `data/` adaptable pour nouveaux types de contenus
 - Architecture permettant l'ajout de :
-  - Nouveaux profils d'interface utilisateur
-  - Modules de traitement spécialisés
-  - Connecteurs pour systèmes externes
-  - Capacités de stockage étendues
+   - Nouveaux modules de traitement spécialisés
+   - Connecteurs pour systèmes externes
+   - Capacités de stockage étendues
 
 ## Contrat API (inputs / outputs — ce que les agents doivent connaître)
 
@@ -131,6 +130,6 @@ Invoke-RestMethod 'http://127.0.0.1:8000/control' -Method Get
 ```
 
 ## Commandes Clés
-- `.`\scripts\Start-ElyonEU.ps1` : démarrage complet (API + UI selon script)
-- `.`\scripts\Start-ElyonEU-Desktop.ps1` : app desktop (PySide6)
+- `scripts\Start-ElyonEU.bat` : démarrage batch (API + desktop, navigateur optionnel)
+- `scripts\Start-ElyonEU-Desktop.ps1` : app desktop (PySide6)
 - `.`\scripts\Stop-ElyonEU.ps1` : arrêt propre

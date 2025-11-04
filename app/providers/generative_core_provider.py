@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 
 # import service module (local import)
-from app.services import generative_core as service
+from app.services import generative_core as service  # type: ignore[import]
 
 JsonPayload = Union[str, bytes, bytearray, memoryview]
 

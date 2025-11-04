@@ -1,16 +1,15 @@
 ﻿# -*- coding: utf-8 -*-
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-import asyncio, threading, time, os, json, requests, sys
+import asyncio, threading, time, os, json, sys
+import httpx
 from pathlib import Path
 from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-from app.providers.generative_core_provider import GenerativeCoreProvider
 
 APP_NAME = "ElyonEU (local)"
 APP_VER  = "0.3.0"  # UI profiles + chat
@@ -20,7 +19,7 @@ DATA_DIR    = ROOT / "data"
 JOURNAL_DIR = ROOT / "journal"
 STATIC_DIR  = Path(__file__).resolve().parent / "static"
 UI_DIR      = ROOT / "ui"
-CFG_UI      = ROOT / "config" / "ui_profile.json"
+WEB_UI_FILE = UI_DIR / "chat" / "index.html"
 CFG_CHAT    = ROOT / "config" / "chat_backend.json"
 
 # État / événements
@@ -39,19 +38,44 @@ SELF = {
 app = FastAPI(title="ElyonEU API", version=APP_VER)
 app.mount("/static", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 
-# provider cache (lazy)
-_GEN_PROVIDER: Optional[GenerativeCoreProvider] = None
+# génération locale simplifiée (fallback)
+def local_generate(prompt: str, mode: str = "normal") -> tuple[str, str]:
+    text = prompt.strip()
+    if not text:
+        return ("(mode local) Décris ta situation pour que je propose une prochaine étape alignée 6S/6R.", "gen_local")
 
+    low = text.lower()
+    if "qui es-tu" in low or "qui es tu" in low:
+        return (
+            "Je suis ÉlyonEU, instance locale gouvernée 6S/6R. Je journalise en JSONL et t’aide à piloter les flux internes sans cloud.",
+            "gen_local",
+        )
+    if "quelle est ta mission" in low:
+        return (
+            "Ma mission est de guider l’opérateur ou l’opératrice vers la prochaine action concrète, avec sûreté, souveraineté et responsabilité.",
+            "gen_local",
+        )
 
-def get_gen_provider() -> GenerativeCoreProvider:
-    global _GEN_PROVIDER
-    if _GEN_PROVIDER is None:
-        _GEN_PROVIDER = GenerativeCoreProvider()
-    return _GEN_PROVIDER
+    if mode == "resume":
+        body = f"Synthèse rapide : {text[:240]}"
+    elif mode == "actions":
+        body = (
+            "Actions suggérées :\n"
+            "1. Identifier les données utiles.\n"
+            "2. Vérifier le journal local pour les événements récents.\n"
+            "3. Proposer une étape alignée 6S/6R."
+        )
+    else:
+        body = (
+            "Analyse locale : je te recommande de vérifier les journaux récents, d’expliciter le besoin précis et"
+            " de formuler la prochaine action opérationnelle."
+            f" (Entrée reçue: {text[:200]})"
+        )
+    return (body, "gen_local")
 
 # Mount local routers (if present)
 try:
-    from api.routers.generative import router as generative_router
+    from api.routers.generative import router as generative_router  # type: ignore[import]
     app.include_router(generative_router)
 except Exception:
     # router optional — continue if not present
@@ -60,7 +84,7 @@ except Exception:
 
 # ---------- utilitaires ----------
 def ensure_dirs():
-    for p in (DATA_DIR, JOURNAL_DIR, UI_DIR, STATIC_DIR, CFG_UI.parent, CFG_CHAT.parent):
+    for p in (DATA_DIR, JOURNAL_DIR, UI_DIR, STATIC_DIR, CFG_CHAT.parent):
         p.mkdir(parents=True, exist_ok=True)
 
 
@@ -85,22 +109,6 @@ def log_event(kind: str, payload: Optional[dict] = None):
     except Exception:
         pass
 
-def read_default_ui() -> str:
-    try:
-        if CFG_UI.exists():
-            j = json.loads(CFG_UI.read_text(encoding="utf-8"))
-            v = (j.get("default_ui") or "chat").strip().lower()
-            return v if v in {"divine", "normal", "moniteur", "chat"} else "chat"
-    except Exception:
-        pass
-    return "chat"
-
-def ui_file_for(name: str) -> Path:
-    name = (name or "").strip().lower()
-    if name not in {"divine", "normal", "moniteur", "chat"}:
-        name = read_default_ui()
-    return (UI_DIR / name / "index.html")
-
 def load_chat_cfg():
     cfg = {"provider":"lmstudio","base_url":"http://127.0.0.1:1234/v1","model":"mistral-7b-instruct-v0.1","api_key":""}
     try:
@@ -114,29 +122,14 @@ def load_chat_cfg():
 
 # ---------- routes ----------
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request):
-    qp_ui = request.query_params.get("ui")
-    if qp_ui:
-        target = ui_file_for(qp_ui)
-        if target.exists():
-            return HTMLResponse(target.read_text(encoding="utf-8"))
-        return RedirectResponse(url="/ui")
-    target = ui_file_for(read_default_ui())
-    if target.exists():
-        return HTMLResponse(target.read_text(encoding="utf-8"))
-    return HTMLResponse("<h1>ElyonEU API</h1><p>UI introuvable (ui/{divine|normal|moniteur|chat}/index.html)</p>")
+def home():
+    if WEB_UI_FILE.exists():
+        return HTMLResponse(WEB_UI_FILE.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>ElyonEU API</h1><p>Interface web introuvable (ui/chat/index.html)</p>")
 
 @app.get("/ui", response_class=HTMLResponse)
-def ui_switcher():
-    html = f"""
-    <!doctype html><meta charset="utf-8"><title>ElyonEU — UI selector</title>
-    <body style="font-family:Segoe UI,system-ui;background:#0f172a;color:#e5e7eb">
-    <h1>Sélecteur d'UI</h1>
-    <p><a href="/?ui=chat">UI Chat</a> · <a href="/?ui=divine">UI Divine</a> · <a href="/?ui=normal">UI Normale</a> · <a href="/?ui=moniteur">UI Moniteur</a></p>
-    <p>Profil par défaut actuel : <b>{read_default_ui()}</b></p>
-    </body>
-    """
-    return HTMLResponse(html)
+def ui_entrypoint():
+    return home()
 
 @app.get("/health")
 def health():
@@ -191,42 +184,36 @@ async def chat(req: Request):
     data = await req.json()
     msgs = data.get("messages") or []
     cfg = load_chat_cfg()
+    print("[api] /chat reçu", len(msgs), "messages", flush=True)
 
     # Tentative LM Studio (OpenAI compatible)
     try:
         url = f"{cfg['base_url'].rstrip('/')}/chat/completions"
-        headers = {"Content-Type":"application/json"}
+        headers = {"Content-Type": "application/json"}
         if cfg.get("api_key"):
             headers["Authorization"] = f"Bearer {cfg['api_key']}"
         payload = {
-            "model": cfg.get("model",""),
+            "model": cfg.get("model", ""),
             "messages": msgs,
             "temperature": data.get("temperature", 0.3),
             "max_tokens": data.get("max_tokens", 512),
         }
-        r = requests.post(url, headers=headers, json=payload, timeout=20)
-        if r.ok:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0, read=18.0)) as client:
+            r = await client.post(url, headers=headers, json=payload)
+        if r.is_success:
             j = r.json()
-            reply = j.get("choices",[{}])[0].get("message",{}).get("content","").strip()
+            reply = j.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
             if reply:
-                log_event("CHAT", {"provider":"lmstudio","len":len(reply)})
-                return JSONResponse({"reply": reply, "provider":"lmstudio"})
-    except Exception as ex:
+                log_event("CHAT", {"provider": "lmstudio", "len": len(reply)})
+                return JSONResponse({"reply": reply, "provider": "lmstudio"})
+    except Exception:
         pass
 
     # Fallback local (mode dégradé)
-    last_user = next((m["content"] for m in reversed(msgs) if m.get("role")=="user"), "")
-    try:
-        prov = get_gen_provider()
-        result = prov.generate(last_user or "Bonjour", mode=data.get("mode", "normal"))
-        reply = result.text
-        provider = f"gen_{result.used}"
-        log_event("CHAT", {"provider": provider, "len": len(reply)})
-        return JSONResponse({"reply": reply, "provider": provider})
-    except Exception as ex:
-        fallback = f"(mode dégradé local) Tu as dit : {last_user[:400]}"
-        log_event("CHAT", {"provider":"local_fallback","len":len(fallback),"err":str(ex)[:200]})
-        return JSONResponse({"reply": fallback, "provider":"local_fallback"})
+    last_user = next((m["content"] for m in reversed(msgs) if m.get("role") == "user"), "")
+    reply, provider = local_generate(last_user or "Bonjour", mode=data.get("mode", "normal"))
+    log_event("CHAT", {"provider": provider, "len": len(reply)})
+    return JSONResponse({"reply": reply, "provider": provider})
 
 
 # ---------- heartbeat ----------
@@ -255,7 +242,7 @@ def main():
     cfg = HyperConfig()
     cfg.bind = ["127.0.0.1:8000"]
     cfg.loglevel = "info"
-    asyncio.run(serve(app, cfg))
+    asyncio.run(serve(app, cfg))  # type: ignore[arg-type]
 
 if __name__ == "__main__":
     main()

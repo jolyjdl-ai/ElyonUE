@@ -30,12 +30,12 @@ if (-not $busy) {
 $VenvApp = Join-Path $App ".venv"
 $PyApp   = Join-Path $VenvApp "Scripts\python.exe"
 if ($Reinstall -or -not (Test-Path $PyApp)) {
-  Write-Host "→ Préparation venv APP (Textual)..." -ForegroundColor Cyan
+  Write-Host "→ Préparation venv APP (PySide6)..." -ForegroundColor Cyan
   try { py -3 -m venv $VenvApp } catch { python -m venv $VenvApp }
   & $PyApp -m pip install -U pip
   & $PyApp -m pip install -r (Join-Path $App "requirements_app.txt")
 }
 
-# Lance l'application TUI (moniteur + chat)
-Write-Host "→ Lancement ÉlyonEU TUI (mainframe-style)..." -ForegroundColor Green
-& $PyApp (Join-Path $App "elyon_tui.py")
+# Lance l'application desktop
+Write-Host "→ Lancement ÉlyonEU Desktop..." -ForegroundColor Green
+& $PyApp (Join-Path $App "elyon_desktop.py")

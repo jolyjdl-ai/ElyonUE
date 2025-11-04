@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "ElyonEU API (FastAPI)",
+      "type": "python",
+      "request": "launch",
+  "module": "hypercorn",
+  "args": ["api.elyon_api:app", "--reload", "--bind", "127.0.0.1:8000"],
+  "envFile": "${workspaceFolder}/.env",
+  "console": "integratedTerminal",
+  "cwd": "${workspaceFolder}",
+      "env": { "PYTHONUNBUFFERED": "1" }
+    }
+  ]
+}

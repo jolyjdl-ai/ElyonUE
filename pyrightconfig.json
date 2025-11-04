@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/pyright/main/packages/pyright-schemas/config.schema.json",
+  "venvPath": "./api",
+  "venv": ".venv",
+  "typeCheckingMode": "basic",
+  "extraPaths": ["./", "./api", "./app"],
+  "executionEnvironments": [
+    {
+      "root": "./api",
+      "venvPath": "./api",
+      "venv": ".venv",
+      "extraPaths": ["../", "../app"]
+    },
+    {
+      "root": "./app",
+      "venvPath": "./",
+      "venv": ".venv_app",
+      "extraPaths": ["../"]
+    }
+  ],
+  "diagnosticSeverityOverrides": {
+    "reportMissingModuleSource": "none"
+  }
+}

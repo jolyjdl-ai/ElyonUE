@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Install venv + deps",
+      "type": "shell",
+      "command": "py -3 -m venv .venv && .\\.venv\\Scripts\\python.exe -m pip install -U pip && .\\.venv\\Scripts\\python.exe -m pip install -r requirements.txt",
+      "options": { "cwd": "${workspaceFolder}/api" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run API (hypercorn)",
+      "type": "shell",
+      "command": ".\\.venv\\Scripts\\python.exe elyon_api.py",
+      "options": { "cwd": "${workspaceFolder}/api" },
+      "problemMatcher": []
+    },
+    {"label":"Install deps","type":"shell","command":"pip install -U -r requirements.txt || pip freeze > requirements.txt","options":{"env":{}}},
+    {"label":"Run API","type":"shell","command":"py -m hypercorn api.elyon_api:app --reload --bind 127.0.0.1:8000","options":{"cwd":"${workspaceFolder}"}}
+  ]
+}

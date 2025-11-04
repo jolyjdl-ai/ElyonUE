@@ -1,0 +1,5 @@
+generative_core:
+  allow_cloud: false
+  enable_autonomy: true
+  autonomy_min_interval_s: 900
+  sixs_threshold: 3

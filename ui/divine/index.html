@@ -1,0 +1,67 @@
+﻿<!doctype html>
+<meta charset="utf-8">
+<title>ElyonEU — Divine UI</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<body style="font-family:Segoe UI,system-ui;background:#0f172a;color:#e5e7eb;margin:0;">
+  <header style="padding:14px 18px;border-bottom:1px solid #1f2937;background:#0b1220;position:sticky;top:0">
+    <b>ÉlyonEU</b> — <span style="opacity:.8">Divine UI</span>
+    <span style="float:right;opacity:.8">Local • Gouvernance 6S/6R</span>
+  </header>
+
+  <main style="padding:18px">
+    <h1 style="margin:0 0 8px">Tableau de bord</h1>
+
+    <div style="margin:10px 0 16px;padding:10px;border:1px solid #1f2937;border-radius:10px;background:#0b1220;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button id="btnPause">Pause</button>
+      <button id="btnResume">Resume</button>
+      <label>Intervalle (s): <input id="iv" type="number" min="1" max="3600" value="1" style="width:80px"></label>
+      <button id="btnSetIv">Appliquer</button>
+      <small id="ctlState" style="opacity:.8;margin-left:8px"></small>
+    </div>
+
+    <div style="display:grid;gap:16px;grid-template-columns:1fr 1fr;">
+      <section style="border:1px solid #1f2937;border-radius:12px;padding:12px;background:#0b1220">
+        <h3 style="margin:0 0 8px">Self</h3>
+        <pre id="self" style="white-space:pre-wrap;background:#0f172a;border:1px solid #1f2937;border-radius:8px;padding:10px;min-height:120px"></pre>
+      </section>
+
+      <section style="border:1px solid #1f2937;border-radius:12px;padding:12px;background:#0b1220">
+        <h3 style="margin:0 0 8px">Timeline</h3>
+        <div id="ev"></div>
+      </section>
+    </div>
+
+    <section style="margin-top:16px;border:1px dashed #1f2937;border-radius:12px;padding:12px;background:#0b1220">
+      <h3 style="margin:0 0 8px">Ajouter une note (journal local)</h3>
+      <form id="f">
+        <input id="txt" placeholder="texte…" style="width:60%;padding:8px;border-radius:8px;border:1px solid #1f2937;background:#0f172a;color:#e5e7eb">
+        <button>Enregistrer</button>
+      </form>
+      <small style="opacity:.75">Reste en local (journal/*.jsonl)</small>
+    </section>
+  </main>
+
+  <script>
+    const POLL_MS = 1000;
+    async function loadSelf(){ const r=await fetch('/self'); const j=await r.json();
+      document.getElementById('self').textContent = JSON.stringify(j, null, 2); }
+    async function loadEv(){ const r=await fetch('/events'); const j=await r.json();
+      document.getElementById('ev').innerHTML = (j.events||[]).slice(-50).reverse()
+        .map(e => '<pre style="margin:0 0 6px;background:#0f172a;border:1px solid #1f2937;border-radius:8px;padding:8px;">'
+          + JSON.stringify(e, null, 2) + '</pre>').join(''); }
+    async function postNote(text){
+      await fetch('/journal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+      await loadEv(); }
+    async function ctlGet(){ const r=await fetch('/control'); const j=await r.json();
+      document.getElementById('ctlState').textContent='Pings: '+(j.run_pings?'ON':'OFF')+' · interval='+ (j.interval_sec||1)+'s';
+      document.getElementById('iv').value=j.interval_sec||1; }
+    async function ctlSet(obj){ await fetch('/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj)}); await ctlGet(); }
+    document.getElementById('f').addEventListener('submit', (e)=>{ e.preventDefault();
+      const v=document.getElementById('txt').value.trim(); if(!v)return; postNote(v); document.getElementById('txt').value=''; });
+    document.getElementById('btnPause').onclick  = ()=> ctlSet({run_pings:false});
+    document.getElementById('btnResume').onclick = ()=> ctlSet({run_pings:true});
+    document.getElementById('btnSetIv').onclick  = ()=> { const v=parseInt(document.getElementById('iv').value||'1',10); ctlSet({interval_sec:v}); };
+
+    ctlGet(); loadSelf(); loadEv(); setInterval(loadEv, POLL_MS);
+  </script>
+</body>

@@ -1,0 +1,100 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>ÉlyonEU — Chat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --bg:#0f172a; --panel:#0b1220; --line:#1f2a44; --txt:#e5e7eb; --mut:#94a3b8; --acc:#60a5fa; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 system-ui,Segoe UI,Arial}
+  header{position:sticky;top:0;background:#0b1220;border-bottom:1px solid var(--line);padding:12px 16px;display:flex;gap:10px;align-items:center}
+  .badge{border:1px solid var(--line);padding:2px 8px;border-radius:999px;color:var(--mut)}
+  main{max-width:1100px;margin:16px auto;padding:0 16px;display:grid;gap:16px;grid-template-columns:1.2fr .8fr}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+  h3{margin:0 0 8px}
+  #chat{height:60vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px;background:#0a1424}
+  .msg{margin:6px 0;padding:8px 10px;border-radius:10px;max-width:85%}
+  .u{background:#12223a;align-self:flex-end}
+  .a{background:#111826;border:1px solid #1c2942}
+  .row{display:flex;gap:8px;align-items:center}
+  textarea{flex:1;min-height:68px;resize:vertical;background:#091225;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:10px}
+  button{background:#111826;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px 12px}
+  pre{white-space:pre-wrap}
+  .mut{color:var(--mut)}
+  a.badge{color:var(--mut);text-decoration:none}
+</style>
+<body>
+  <header>
+    <div class="badge">ÉlyonEU</div>
+    <div class="badge">Chat IA</div>
+    <div style="flex:1"></div>
+    <a class="badge" href="/?ui=divine">Divine</a>
+    <a class="badge" href="/?ui=normal">Normale</a>
+    <a class="badge" href="/?ui=moniteur">Moniteur</a>
+  </header>
+
+  <main>
+    <section class="card" style="grid-column:1">
+      <h3>Conversation</h3>
+      <div id="chat"></div>
+      <div class="row" style="margin-top:10px">
+        <textarea id="in" placeholder="Écris ta demande… (Ctrl+Enter pour envoyer)"></textarea>
+        <button id="send">Envoyer</button>
+        <button id="clear" title="Effacer l’historique">Effacer</button>
+      </div>
+      <div class="mut" id="prov" style="margin-top:6px">—</div>
+    </section>
+
+    <section class="card" style="grid-column:2">
+      <h3>État & Journal</h3>
+      <div class="row" style="margin-bottom:8px">
+        <button id="pause">Pause</button>
+        <button id="resume">Resume</button>
+        <label>Intervalle (s) <input id="iv" type="number" min="1" max="3600" value="1" style="width:80px"></label>
+        <button id="setiv">Appliquer</button>
+      </div>
+      <pre id="self" class="mut" style="height:160px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;background:#0a1424"></pre>
+      <div id="ev" style="margin-top:8px;height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;background:#0a1424"></div>
+    </section>
+  </main>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    let history = [{role:"system", content:"Tu es ÉlyonEU, IA locale éthique pour la Région Grand Est. Réponds en français, clair et utile."}];
+
+    function addMsg(role, text){
+      const b=document.createElement('div'); b.className='msg '+(role==='user'?'u':'a'); b.innerHTML = '<pre>'+escapeHtml(text)+'</pre>';
+      $('#chat').appendChild(b); $('#chat').scrollTop = $('#chat').scrollHeight;
+    }
+    function escapeHtml(s){ return s.replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+    async function send(){
+      const t = ($('#in').value||'').trim(); if(!t) return;
+      $('#in').value=''; addMsg('user', t);
+      history.push({role:'user', content:t});
+      const resp = await fetch('/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({messages: history})});
+      const j = await resp.json();
+      const reply = j.reply || '(pas de réponse)';
+      $('#prov').textContent = 'Fournisseur: '+ (j.provider||'?');
+      addMsg('assistant', reply);
+      history.push({role:'assistant', content: reply});
+    }
+
+    // UI events
+    $('#send').onclick = send;
+    $('#clear').onclick = ()=>{ history = history.slice(0,1); $('#chat').innerHTML=''; $('#prov').textContent='—'; };
+    $('#in').addEventListener('keydown', e=>{ if(e.key==='Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); send(); } });
+
+    // Etat & journal
+    async function drawSelf(){ const r=await fetch('/self'); const j=await r.json(); $('#self').textContent = JSON.stringify(j,null,2); }
+    async function drawEv(){ const r=await fetch('/events'); const j=await r.json();
+      $('#ev').innerHTML = (j.events||[]).slice(-30).reverse().map(e=>'<div class="mut"><code>'+e.ts+'</code> · <b>'+e.type+'</b> '+(e.data?JSON.stringify(e.data):'')+'</div>').join(''); }
+    async function ctlGet(){ const r=await fetch('/control'); const j=await r.json(); $('#iv').value=j.interval_sec||1; }
+    async function ctlSet(o){ await fetch('/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)}); ctlGet(); }
+    $('#pause').onclick = ()=> ctlSet({run_pings:false});
+    $('#resume').onclick= ()=> ctlSet({run_pings:true});
+    $('#setiv').onclick = ()=> { const v = Math.max(1, Math.min(3600, parseInt($('#iv').value||'1',10))); ctlSet({interval_sec:v}); };
+
+    // init
+    (async()=>{ await drawSelf(); await drawEv(); await ctlGet(); })();
+    setInterval(drawEv, 1500);
+  </script>
+</body>

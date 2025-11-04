@@ -1,0 +1,134 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>ElyonEU — Moniteur</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --bg:#0b0f14; --panel:#0e1620; --line:#1a2635; --txt:#d1e7ff; --acc:#7ae582; --mut:#8fa6bf; --warn:#ffd166; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;}
+  header{position:sticky;top:0;background:linear-gradient(180deg,#0c141f,#0a0f17);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:12px;align-items:center}
+  .badge{border:1px solid var(--line);background:#0a1320;padding:2px 8px;border-radius:999px;color:var(--mut)}
+  main{max-width:1100px;margin:18px auto;padding:0 16px;display:grid;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+  h3{margin:0 0 8px;color:#cfe6ff;font-weight:600}
+  pre, .log{background:#08101a;border:1px solid var(--line);border-radius:8px;padding:10px;margin:0;overflow:auto}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  button, input{background:#0b1320;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 10px}
+  button:hover{border-color:#2a3b55} input[type="number"]{width:90px}
+  .kbd{border:1px solid var(--line);border-radius:6px;padding:0 6px;background:#0a1320;color:var(--mut)}
+  .pill{color:#0b1510;background:linear-gradient(180deg,#6ee7b7,#34d399);border-radius:999px;padding:2px 8px;font-weight:700}
+  .mut{color:var(--mut)} .ok{color:var(--acc)} .warn{color:var(--warn)}
+  .logline{padding:6px 8px;border-bottom:1px dashed #112034}
+  .logline:last-child{border-bottom:none}
+  .ts{color:#8fb0d1;margin-right:8px}
+  .typ{color:#7ae582;margin-right:8px}
+  .data{color:#d1e7ff}
+</style>
+
+<body>
+  <header>
+    <div class="pill">ÉLYON&nbsp;EU</div>
+    <div class="badge">Moniteur</div>
+    <div style="flex:1"></div>
+    <a class="badge" href="/?ui=normal">UI normale</a>
+    <a class="badge" href="/?ui=divine">UI divine</a>
+  </header>
+
+  <main>
+    <section class="card">
+      <h3>Statut & Contrôle</h3>
+      <div class="row">
+        <div id="ctl" class="mut">—</div>
+        <button id="p">Pause</button>
+        <button id="r">Resume</button>
+        <label>Intervalle (s) <input id="iv" type="number" min="1" max="3600" value="1"></label>
+        <button id="setiv">Appliquer</button>
+      </div>
+      <div class="mut" style="margin-top:8px">
+        Raccourcis&nbsp;: <span class="kbd">P</span> Pause · <span class="kbd">R</span> Resume · <span class="kbd">+</span>/<span class="kbd">-</span> intervalle · <span class="kbd">U</span> maj
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Identité</h3>
+      <pre id="self"></pre>
+    </section>
+
+    <section class="card">
+      <h3>Événements récents</h3>
+      <div id="log" class="log" style="max-height:420px"></div>
+      <div class="mut" style="margin-top:6px">Affiche ~50 derniers événements. Rafraîchit toutes les 2s.</div>
+    </section>
+
+    <section class="card">
+      <h3>Ajouter une note (journal local)</h3>
+      <div class="row">
+        <input id="txt" placeholder="texte…" style="flex:1;min-width:280px">
+        <button id="save">Enregistrer</button>
+      </div>
+      <div class="mut" style="margin-top:6px">Stocké dans <code>journal/*.jsonl</code> (local-only)</div>
+    </section>
+  </main>
+
+  <script>
+    const POLL = 2000;
+    const $$ = sel => document.querySelector(sel);
+
+    async function api(path, opt){ const r=await fetch(path, opt); return r.json(); }
+
+    async function drawSelf(){
+      const j = await api('/self');
+      $$('#self').textContent = JSON.stringify(j, null, 2);
+    }
+
+    function formatLine(e){
+      const ts  = `<span class="ts">${e.ts||''}</span>`;
+      const typ = `<b class="typ">${e.type||''}</b>`;
+      const d   = e.data ? `<span class="data">${JSON.stringify(e.data)}</span>` : '';
+      return `<div class="logline">${ts}${typ}${d}</div>`;
+    }
+
+    async function drawLog(){
+      const j = await api('/events');
+      const arr = (j.events||[]).slice(-50).reverse();
+      $$('#log').innerHTML = arr.map(formatLine).join('');
+    }
+
+    async function drawCtl(){
+      const j = await api('/control');
+      $$('#ctl').innerHTML = `Pings: <b class="${j.run_pings?'ok':'warn'}">${j.run_pings?'ON':'OFF'}</b> · interval=<b>${j.interval_sec||1}s</b>`;
+      $$('#iv').value = j.interval_sec || 1;
+    }
+
+    async function setCtl(obj){
+      await api('/control', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj)});
+      await drawCtl();
+    }
+
+    // actions
+    $$('#p').onclick = ()=> setCtl({run_pings:false});
+    $$('#r').onclick = ()=> setCtl({run_pings:true});
+    $$('#setiv').onclick = ()=> {
+      const v = Math.max(1, Math.min(3600, parseInt($$('#iv').value||'1',10)));
+      setCtl({interval_sec:v});
+    };
+    $$('#save').onclick = async ()=>{
+      const v = ($$('#txt').value||'').trim(); if(!v) return;
+      await api('/journal', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:v})});
+      $$('#txt').value=''; await drawLog();
+    };
+
+    // raccourcis clavier
+    window.addEventListener('keydown', (e)=>{
+      const k = e.key.toUpperCase();
+      if (k==='P') $$('#p').click();
+      if (k==='R') $$('#r').click();
+      if (k==='+') { $$('#iv').value = (+$('#iv').value||1)+1; $$('#setiv').click(); }
+      if (k==='-') { $$('#iv').value = Math.max(1,(+$('#iv').value||1)-1); $$('#setiv').click(); }
+      if (k==='U') { drawSelf(); drawLog(); drawCtl(); }
+    });
+
+    // init + polling doux
+    (async ()=>{ await drawSelf(); await drawLog(); await drawCtl(); })();
+    setInterval(drawLog, POLL);
+  </script>
+</body>

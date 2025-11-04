@@ -1,0 +1,22 @@
+﻿# Python
+.venv/
+venv/
+api/.venv/
+app/.venv/
+.venv_app/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VSCode
+.vscode/settings.json
+
+# Logs / sorties
+logs/
+journal/
+data/vector_index/*
+!data/vector_index/.keep
+workspace/*
+!workspace/.keep

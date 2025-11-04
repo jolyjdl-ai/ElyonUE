@@ -1,0 +1,27 @@
+### Health
+GET http://localhost:8000/health
+
+### Chat local-first
+POST http://localhost:8000/chat
+Content-Type: application/json
+
+{
+	"messages": [
+		{ "role": "system", "content": "Contexte test" },
+		{ "role": "user", "content": "Fais un résumé en 3 points" }
+	]
+}
+
+### Rebuild UI (démo)
+POST http://localhost:8000/ui/rebuild
+Content-Type: application/json
+
+{
+	"specification": {
+		"title": "Dashboard",
+		"components": [
+			{ "type": "card", "title": "Tâches", "metric": "3" },
+			{ "type": "chart", "title": "Progression" }
+		]
+	}
+}

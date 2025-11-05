@@ -12,9 +12,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 try:
-    from .core import memory, intent, vector_index  # type: ignore[import]
+    from .core import memory, intent, vector_index, governance, profiles, divine  # type: ignore[import]
+    from .routers import governance_profiles  # type: ignore[import]
 except ImportError:
-    from api.core import memory, intent, vector_index  # type: ignore[import]
+    from api.core import memory, intent, vector_index, governance, profiles, divine  # type: ignore[import]
+    from api.routers import governance_profiles  # type: ignore[import]
 
 def load_env_file(path: Optional[Path] = None) -> None:
     env_path = path or (ROOT / ".env")
@@ -65,7 +67,22 @@ SELF = {
 app = FastAPI(title="ElyonEU API", version=APP_VER)
 app.mount("/static", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 
-# génération locale simplifiée (fallback)
+# ============================================================================
+# INITIALISATION GOUVERNANCE, PROFILS ET DIVINE
+# ============================================================================
+try:
+    # Instances des modules de gouvernance
+    territorial_gov = governance.TerritorialGovernance()
+    profile_mgr = profiles.UserProfileManager()
+    ui_divine = divine.UIDivine(elyon_api_reference=app)
+
+    # Initialisation du routeur de gouvernance/profils/divine
+    governance_profiles.init_modules(territorial_gov, profile_mgr, ui_divine)
+    app.include_router(governance_profiles.router, prefix="/v2")
+
+    print("[api] ✓ Gouvernance, profils et divine activés (Région Grand Est 6S/6R)", flush=True)
+except Exception as exc:
+    print(f"[api] ⚠ Impossible d'initialiser gouvernance: {exc}", flush=True)# génération locale simplifiée (fallback)
 if TYPE_CHECKING:
     from app.providers.generative_core_provider import GenerativeCoreProvider  # type: ignore[import]
 

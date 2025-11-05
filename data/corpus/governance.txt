@@ -1,0 +1,7 @@
+6S/6R governance checklist:
+1. Sovereignty: keep all data local.
+2. Safety: monitor pings and alerts.
+3. Security: rotate API keys, limit external calls.
+4. Sensitivity: filter confidential content.
+5. Sustainability: back up journals daily.
+6. Solidarity: share improvements with the team.

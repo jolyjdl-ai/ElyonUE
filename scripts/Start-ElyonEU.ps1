@@ -1,4 +1,5 @@
-﻿# Start-ElyonEU.ps1 — démarre l'API locale et ouvre la page
+﻿# Start-ElyonEU.ps1 — démarre l'API locale et ouvre la UI web (UI desktop voir Start-ElyonEU-All.ps1)
+# Pour lancer l'UI desktop (prioritaire) : scripts\Start-ElyonEU-All.ps1
 $Root = "C:\ElyonEU"
 $Api  = Join-Path $Root "api"
 $Venv = Join-Path $Api ".venv"
@@ -14,4 +15,4 @@ if (!(Test-Path $Venv)) {
 
 Start-Process $Py -ArgumentList (Join-Path $Api 'elyon_api.py') -WorkingDirectory $Api
 Start-Sleep -Seconds 1
-Start-Process "http://127.0.0.1:8000"
+Start-Process "http://127.0.0.1:8000/ui"

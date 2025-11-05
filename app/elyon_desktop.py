@@ -83,20 +83,56 @@ class ChatPanel(QtWidgets.QWidget):
         self.history.append(f"<div style='background:#12223a;padding:8px;border-radius:8px;margin:6px 0'>[USER] {self.escape(text)}</div>")
         self.scroll_bottom()
 
-    def add_assistant(self, text:str):
-        self.history.append(f"<div style='background:#111826;border:1px solid #1c2942;padding:8px;border-radius:8px;margin:6px 0'>[ASSISTANT] {self.escape(text)}</div>")
+    def add_assistant(self, text:str, provider:str = "?", trace:dict|None=None):
+        body = self.escape(text).replace("\n", "<br>")
+        meta_html = ""
+        if trace:
+            parts = []
+            local_provider = trace.get("local_provider") or "?"
+            parts.append(f"local={local_provider}")
+            if trace.get("external_success"):
+                parts.append(f"external={trace.get('external_provider') or provider}")
+            elif trace.get("external_attempted"):
+                parts.append("external=échec")
+            else:
+                parts.append("external=non")
+            policy = trace.get("policy")
+            if policy:
+                parts.append(f"policy={policy}")
+            meta_html = (
+                "<div style='font-size:11px;color:#94a3b8;margin-top:4px'>"
+                + " · ".join(parts)
+                + "</div>"
+            )
+        self.history.append(
+            "<div style='background:#111826;border:1px solid #1c2942;padding:8px;border-radius:8px;margin:6px 0'>"
+            f"[ASSISTANT] {body}{meta_html}</div>"
+        )
         self.scroll_bottom()
 
-    def set_provider(self, name:str):
-        self.lblProvider.setText(f"Fournisseur: {name}")
+    def set_provider(self, name:str, trace:dict|None=None):
+        info = f"Fournisseur: {name}"
+        if trace:
+            extra = []
+            if trace.get("external_success"):
+                extra.append(f"external={trace.get('external_provider') or name}")
+            elif trace.get("external_attempted"):
+                extra.append("external=échec")
+            else:
+                extra.append("external=non")
+            policy = trace.get("policy")
+            if policy:
+                extra.append(f"policy={policy}")
+            info += " (" + ", ".join(extra) + ")"
+        self.lblProvider.setText(info)
 
-    def set_busy(self, active: bool, provider: str | None = None):
+    def set_busy(self, active: bool, provider: str | None = None, trace:dict|None=None):
         self.btnSend.setDisabled(active)
         self.lblStatus.setText("Envoi en cours…" if active else "Prêt.")
         if not active:
             self.btnSend.setDisabled(False)
             if provider:
-                self.set_provider(provider)
+                self.set_provider(provider, trace)
 
     def on_send(self):
         text = self.input.toPlainText().strip()
@@ -165,7 +201,7 @@ class StatusPanel(QtWidgets.QWidget):
 
 # --------------------- Main ---------------------
 class MainWindow(QtWidgets.QMainWindow):
-    replyReady = Signal(str, str)
+    replyReady = Signal(str, str, dict)
     controlReady = Signal(float)
     selfReady = Signal(dict)
     eventsReady = Signal(list)
@@ -248,15 +284,18 @@ class MainWindow(QtWidgets.QMainWindow):
                 if res is None:
                     reply = "(API indisponible)"
                     provider = "ui"
+                    trace = {"error": "chat endpoint inaccessible"}
                 else:
                     reply = res.get("reply", "(pas de réponse)")
                     provider = res.get("provider", "?")
+                    trace = res.get("trace", {}) or {}
             except Exception as exc:
                 reply = f"(erreur locale) {exc}"
                 provider = "ui"
+                trace = {"error": str(exc)}
             finally:
                 print(f"[desktop] chat <- {provider} / {len(reply)} car.", flush=True)
-                self.replyReady.emit(reply, provider)
+                self.replyReady.emit(reply, provider, trace)
 
         threading.Thread(target=_work, daemon=True).start()
 
@@ -300,9 +339,9 @@ class MainWindow(QtWidgets.QMainWindow):
             right = max(320, int(self.width() * 0.4))
             self.splitter.setSizes([left, right])
 
-    def _apply_reply(self, text: str, provider: str) -> None:
-        self.chat.add_assistant(text)
-        self.chat.set_busy(False, provider)
+    def _apply_reply(self, text: str, provider: str, trace: dict) -> None:
+        self.chat.add_assistant(text, provider, trace)
+        self.chat.set_busy(False, provider, trace)
 
     def open_web_ui(self) -> None:
         url = QUrl(WEB_UI)

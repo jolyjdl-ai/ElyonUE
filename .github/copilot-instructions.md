@@ -88,8 +88,8 @@ scripts\Start-ElyonEU.bat
 
 - POST /chat
    - Input: { "messages": [ { "role": "user|system|assistant", "content": "..." }, ... ], "temperature"?: float, "max_tokens"?: int }
-   - Output: { "reply": "...", "provider": "lmstudio|local_fallback" }
-   - Comportement: essai LM Studio (OpenAI-compatible) via `config/chat_backend.json` -> fallback local si indisponible.
+   - Output: { "reply": "...", "provider": "openai|lmstudio|gen_local|gen_cloud|local_fallback", "trace": {...} }
+   - Comportement: politique local-first (`policy=local_first` par défaut). Génération locale journalisée (`CHAT_TRACE` stage=local), puis appel externe uniquement si demandé (`use_external|external|force_external|prefer_external` à true) ou si `external_on_fallback` est activé lorsque la réponse tombe sur `gen_local`. Les événements `CHAT_TRACE` permettent de suivre chaque tentative/succès/erreur.
 
 - GET /health
    - Retour: { "status": "ok", "ts": <float> }

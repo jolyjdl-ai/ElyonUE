@@ -1,0 +1,89 @@
+{
+  "history": [
+    {
+      "ts": "2025-11-05 13:57:08",
+      "user": "Bonjour, qui es-tu?",
+      "assistant": "Bonjour, je suis ÉlyonEU, une IA dédiée à la gouvernance locale et à l'optimisation des opérations selon le cadre 6S/6R. Comment puis-je vous aider aujourd'hui ?",
+      "meta": {
+        "intent": "greeting",
+        "confidence": 0.6,
+        "keywords": [
+          "bonjour",
+          "qui"
+        ],
+        "entities": {},
+        "urgent": false
+      }
+    },
+    {
+      "ts": "2025-11-05 13:57:13",
+      "user": "C'est URGENT! Résume-moi les principes 6S/6R rapidement.",
+      "assistant": "Les principes 6S/6R d'ElyonEU sont :\n\n1. **Souveraineté** : Les données doivent rester locales.\n2. **Sécurité** : Rotation des clés API et limitation des appels externes.\n3. **Sensibilité** : Filtrage du contenu confidentiel.\n4. **Durabilité** : Assurer la continuité des opérations.\n5. **Surveillance** : Suivi des alertes et des pings.\n6. **Soutien** : Maintien des journaux d'activité et disponibilité de l'API.\n\n**Prochaine étape** : Vérifiez immédiatement les journaux d'activité pour assurer la conformité avec ces principes.",
+      "meta": {
+        "intent": "summary_request",
+        "confidence": 0.8,
+        "keywords": [
+          "est",
+          "urgent",
+          "résume",
+          "moi",
+          "les",
+          "principes"
+        ],
+        "entities": {},
+        "urgent": true
+      }
+    },
+    {
+      "ts": "2025-11-05 13:57:20",
+      "user": "Peux-tu me résumer le plan gouvernance 6S/6R avec urgence, et proposer une prochaine étape opérationnelle alignée à la gouvernance ?",
+      "assistant": "Analyse locale : je te recommande de vérifier les journaux récents, d’expliciter le besoin précis et de formuler la prochaine action opérationnelle. (Entrée reçue: Contexte récent :\n[2025-11-05 13:55:56] U (intent=summary_request): Peux-tu me résumer le plan gouvernance 6S/6R avec urgence, et proposer une prochaine étape opérationnelle alignée à la gouvernance ?)",
+      "meta": {
+        "intent": "summary_request",
+        "confidence": 0.8,
+        "keywords": [
+          "gouvernance",
+          "peux",
+          "résumer",
+          "plan",
+          "avec",
+          "urgence"
+        ],
+        "entities": {},
+        "urgent": true
+      }
+    },
+    {
+      "ts": "2025-11-05 13:57:26",
+      "user": "Je m'appelle Alice",
+      "assistant": "Bonjour Alice ! Comment puis-je vous aider aujourd'hui ? Si vous avez des questions sur la gouvernance 6S/6R ou un autre sujet, n'hésitez pas à me le faire savoir.",
+      "meta": {
+        "intent": "short_prompt",
+        "confidence": 0.4,
+        "keywords": [
+          "appelle",
+          "alice"
+        ],
+        "entities": {},
+        "urgent": false
+      }
+    },
+    {
+      "ts": "2025-11-05 13:57:29",
+      "user": "Quel est mon nom?",
+      "assistant": "Votre nom est Alice. Comment puis-je vous aider aujourd'hui ?",
+      "meta": {
+        "intent": "question",
+        "confidence": 0.6,
+        "keywords": [
+          "quel",
+          "est",
+          "mon",
+          "nom"
+        ],
+        "entities": {},
+        "urgent": false
+      }
+    }
+  ]
+}

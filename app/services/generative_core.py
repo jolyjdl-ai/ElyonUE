@@ -19,7 +19,10 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.services.llm_client import generate as llm_generate
+try:
+    from .llm_client import generate as llm_generate
+except ImportError:  # pragma: no cover - fallback lors de l’exécution directe
+    from app.services.llm_client import generate as llm_generate  # type: ignore[import]
 from pydantic import BaseModel, Field
 from fastapi import FastAPI, Body, HTTPException
 from fastapi.responses import JSONResponse
@@ -72,7 +75,11 @@ os.makedirs(CFG.log_dir, exist_ok=True)
 
 # Override config from environment when present (helps local LM Studio testing)
 CFG.openai_base_url = os.getenv("LMSTUDIO_URL", CFG.openai_base_url)
-CFG.openai_api_key = os.getenv("OPENAI_API_KEY", CFG.openai_api_key)
+api_key_env = os.getenv("ELYON_CHAT_API_KEY")
+if api_key_env:
+    CFG.openai_api_key = api_key_env
+else:
+    CFG.openai_api_key = os.getenv("OPENAI_API_KEY", CFG.openai_api_key)
 if os.getenv("ALLOW_CLOUD") is not None:
     try:
         CFG.allow_cloud = str(os.getenv("ALLOW_CLOUD")).lower() in ("1", "true", "yes")
@@ -475,4 +482,4 @@ if __name__ == "__main__":
 
     cfg = HyperConfig()
     cfg.bind = ["0.0.0.0:8061"]
-    asyncio.run(serve(app, cfg))
+    asyncio.run(serve(app, cfg))  # type: ignore[arg-type]

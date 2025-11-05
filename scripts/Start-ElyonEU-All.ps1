@@ -68,14 +68,16 @@ if (-not $apiListening) {
     Write-Host "→ API déjà active sur le port 8000." -ForegroundColor Yellow
 }
 
-if (-not $NoBrowser) {
-    Write-Host "→ Ouverture UI navigateur..." -ForegroundColor Green
-    Start-Process "http://127.0.0.1:8000/ui"
-}
-
+# *** PRIORITÉ : UI Desktop AVANT UI Navigateur ***
 if (-not $NoDesktop) {
     Write-Host "→ Lancement UI desktop (PySide6)..." -ForegroundColor Green
     Start-Process -FilePath $AppPy -ArgumentList (Join-Path $AppDir "elyon_desktop.py") -WorkingDirectory $AppDir
+    Start-Sleep -Seconds 1
+}
+
+if (-not $NoBrowser) {
+    Write-Host "→ Ouverture UI navigateur..." -ForegroundColor Green
+    Start-Process "http://127.0.0.1:8000/ui"
 }
 
 if ($WithMonitor -and (Test-Path $MonFile)) {

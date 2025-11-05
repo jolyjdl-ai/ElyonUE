@@ -1,0 +1,11 @@
+{
+  "protocol": "incident_response_v1",
+  "steps": [
+    "Assess heartbeat and control endpoint",
+    "Switch provider to local fallback if remote fails",
+    "Write a NOTE event with observed anomalies",
+    "Execute reindex if corpus files changed",
+    "Confirm recovery via GET /health"
+  ],
+  "tags": ["monitoring", "operations", "recovery"]
+}

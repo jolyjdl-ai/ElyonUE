@@ -1,40 +1,6 @@
 {
   "history": [
     {
-      "ts": "2025-11-05 13:57:08",
-      "user": "Bonjour, qui es-tu?",
-      "assistant": "Bonjour, je suis ÉlyonEU, une IA dédiée à la gouvernance locale et à l'optimisation des opérations selon le cadre 6S/6R. Comment puis-je vous aider aujourd'hui ?",
-      "meta": {
-        "intent": "greeting",
-        "confidence": 0.6,
-        "keywords": [
-          "bonjour",
-          "qui"
-        ],
-        "entities": {},
-        "urgent": false
-      }
-    },
-    {
-      "ts": "2025-11-05 13:57:13",
-      "user": "C'est URGENT! Résume-moi les principes 6S/6R rapidement.",
-      "assistant": "Les principes 6S/6R d'ElyonEU sont :\n\n1. **Souveraineté** : Les données doivent rester locales.\n2. **Sécurité** : Rotation des clés API et limitation des appels externes.\n3. **Sensibilité** : Filtrage du contenu confidentiel.\n4. **Durabilité** : Assurer la continuité des opérations.\n5. **Surveillance** : Suivi des alertes et des pings.\n6. **Soutien** : Maintien des journaux d'activité et disponibilité de l'API.\n\n**Prochaine étape** : Vérifiez immédiatement les journaux d'activité pour assurer la conformité avec ces principes.",
-      "meta": {
-        "intent": "summary_request",
-        "confidence": 0.8,
-        "keywords": [
-          "est",
-          "urgent",
-          "résume",
-          "moi",
-          "les",
-          "principes"
-        ],
-        "entities": {},
-        "urgent": true
-      }
-    },
-    {
       "ts": "2025-11-05 13:57:20",
       "user": "Peux-tu me résumer le plan gouvernance 6S/6R avec urgence, et proposer une prochaine étape opérationnelle alignée à la gouvernance ?",
       "assistant": "Analyse locale : je te recommande de vérifier les journaux récents, d’expliciter le besoin précis et de formuler la prochaine action opérationnelle. (Entrée reçue: Contexte récent :\n[2025-11-05 13:55:56] U (intent=summary_request): Peux-tu me résumer le plan gouvernance 6S/6R avec urgence, et proposer une prochaine étape opérationnelle alignée à la gouvernance ?)",
@@ -81,6 +47,32 @@
           "mon",
           "nom"
         ],
+        "entities": {},
+        "urgent": false
+      }
+    },
+    {
+      "ts": "2025-11-06 13:34:15",
+      "user": "qui es tu ?",
+      "assistant": "Analyse locale : je te recommande de vérifier les journaux récents, d’expliciter le besoin précis et de formuler la prochaine action opérationnelle. (Entrée reçue: Contexte récent :\n[2025-11-05 13:57:08] U (intent=greeting): Bonjour, qui es-tu?\nA: Bonjour, je suis ÉlyonEU, une IA dédiée à la gouvernance locale et à l'optimisation des opérations selon le cadre 6S)",
+      "meta": {
+        "intent": "question",
+        "confidence": 0.6,
+        "keywords": [
+          "qui"
+        ],
+        "entities": {},
+        "urgent": false
+      }
+    },
+    {
+      "ts": "2025-11-06 13:37:15",
+      "user": "ok",
+      "assistant": "Analyse locale : je te recommande de vérifier les journaux récents, d’expliciter le besoin précis et de formuler la prochaine action opérationnelle. (Entrée reçue: Contexte récent :\n[2025-11-05 13:57:13] U (intent=summary_request): C'est URGENT! Résume-moi les principes 6S/6R rapidement.\nA: Les principes 6S/6R d'ElyonEU sont :\n\n1. **Souveraineté** : Les données )",
+      "meta": {
+        "intent": "short_prompt",
+        "confidence": 0.4,
+        "keywords": [],
         "entities": {},
         "urgent": false
       }

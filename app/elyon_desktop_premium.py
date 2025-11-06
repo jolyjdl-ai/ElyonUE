@@ -55,8 +55,6 @@ COLORS = {
 def create_stylesheet():
     """Stylesheet global premium"""
     return f"""
-    * {{ box-sizing: border-box; }}
-
     QMainWindow, QWidget {{
         background: {COLORS['bg']};
         color: {COLORS['text']};
@@ -459,9 +457,12 @@ class ElyonDesktopPremium(QMainWindow):
         self.nav_garde = SidebarButton("🛡️", "Garde-fous 6S/6R")
         self.nav_about = SidebarButton("ℹ️", "À propos")
 
-        button_group = QtCore.QButtonGroup()
-        for btn in [self.nav_chat, self.nav_monitor, self.nav_secretariat, self.nav_garde, self.nav_about]:
-            button_group.addButton(btn)
+        # Connecter les boutons à la navigation
+        self.nav_chat.clicked.connect(lambda: self.show_panel(0))
+        self.nav_monitor.clicked.connect(lambda: self.show_panel(1))
+        self.nav_secretariat.clicked.connect(lambda: self.show_panel(2))
+        self.nav_garde.clicked.connect(lambda: self.show_panel(3))
+        self.nav_about.clicked.connect(lambda: self.show_panel(4))
 
         sidebar_lay.addWidget(self.nav_chat)
         sidebar_lay.addWidget(self.nav_monitor)

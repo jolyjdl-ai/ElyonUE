@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
 
 print("[launcher] === ÉlyonEU Desktop Premium ===", flush=True)
 print(f"[launcher] Répertoire: {ROOT}", flush=True)

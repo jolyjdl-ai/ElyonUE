@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Lanceur simple de l'API ÉlyonEU"""
+"""Lanceur simple de l'API ÉlyonEU - avec UTF-8 forcé"""
 import sys
 import os
 from pathlib import Path
+
+# Force UTF-8
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
+os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 # Configuration
 root = Path(__file__).parent

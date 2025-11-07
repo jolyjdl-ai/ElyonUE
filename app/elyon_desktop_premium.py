@@ -4,7 +4,7 @@
 Design "Showtime" : Sidebar coloré, gradients, panneaux élégants, multi-vues
 Chat IA + Moniteur + Secrétariat
 """
-import json, os, sys, threading, time
+import json, os, sys, threading, time, queue
 import requests
 from PySide6 import QtWidgets, QtCore, QtGui
 from PySide6.QtCore import Qt, QTimer, Signal, QUrl, QRect, QSize
@@ -16,6 +16,10 @@ from PySide6.QtWidgets import (
 )
 
 API = os.environ.get("ELYON_API_URL", "http://127.0.0.1:8000")
+
+# Queue pour les messages entre threads
+_reply_queue = queue.Queue()
+
 
 # ================== HTTP Utils ==================
 def http_get(path, timeout=5.0):
@@ -29,11 +33,15 @@ def http_get(path, timeout=5.0):
 
 def http_post(path, payload, timeout=20.0):
     try:
+        print(f"[desktop] POST {API + path}", flush=True)
         r = requests.post(API + path, json=payload, timeout=timeout)
+        print(f"[desktop] POST {path} -> Status {r.status_code}", flush=True)
         r.raise_for_status()
-        return r.json()
+        result = r.json()
+        print(f"[desktop] POST {path} -> OK", flush=True)
+        return result
     except Exception as exc:
-        print(f"[desktop] POST {path} -> {exc}", flush=True)
+        print(f"[desktop] POST {path} -> ERROR: {type(exc).__name__}", flush=True)
         return None
 
 # ================== Design System ==================
@@ -167,8 +175,8 @@ class PanelCard(QFrame):
         self.title.setStyleSheet(f"color: {COLORS['text']};")
 
         self.content = QWidget()
-        self.layout = QVBoxLayout(self.content)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        content_layout = QVBoxLayout(self.content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
 
         main_layout = QVBoxLayout(self)
         main_layout.addWidget(self.title)
@@ -176,11 +184,17 @@ class PanelCard(QFrame):
         main_layout.setContentsMargins(0, 0, 0, 0)
 
 class ChatWidget(QWidget):
-    """Panneau Chat avec historique + input"""
+    """Panneau Chat avec historique + input - AMÉLIORÉ"""
     sendRequested = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        # Historique des messages pour le contexte
+        self.messages = []  # List[(role, text), ...]
+
+        # Charger l'historique depuis fichier
+        self.load_history()
 
         # Titre
         title = QLabel("💬 Chat — Conversation naturelle")
@@ -200,12 +214,16 @@ class ChatWidget(QWidget):
                 color: {COLORS['text']};
                 border: 1px solid rgba(255,255,255,.08);
                 border-radius: 10px;
+                padding: 12px;
+                font-family: 'Segoe UI', system-ui;
+                font-size: 13px;
+                line-height: 1.6;
             }}
         """)
 
         # Zone input
         self.input = QPlainTextEdit()
-        self.input.setPlaceholderText("Écrire un message…")
+        self.input.setPlaceholderText("Écrire un message… (Enter pour envoyer, Shift+Enter pour nouvelle ligne)")
         self.input.setMaximumHeight(80)
         self.input.setStyleSheet(f"""
             QPlainTextEdit {{
@@ -213,11 +231,28 @@ class ChatWidget(QWidget):
                 color: {COLORS['text']};
                 border: 1px solid rgba(255,255,255,.08);
                 border-radius: 10px;
+                padding: 10px;
             }}
         """)
 
+        # Override keyPressEvent pour gérer Enter/Shift+Enter
+        original_keypress = self.input.keyPressEvent
+        def input_keypress(event):
+            if event.key() == Qt.Key.Key_Return:
+                if event.modifiers() == Qt.KeyboardModifier.NoModifier:
+                    # Enter seul = envoyer
+                    self.on_send()
+                    event.accept()
+                    return
+                elif event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
+                    # Shift+Enter = nouvelle ligne (comportement par défaut)
+                    pass
+            original_keypress(event)
+
+        self.input.keyPressEvent = input_keypress
+
         # Boutons
-        self.btn_send = QPushButton("Envoyer")
+        self.btn_send = QPushButton("Envoyer (↵)")
         self.btn_send.setObjectName("primary")
         self.btn_send.setStyleSheet(f"""
             QPushButton {{
@@ -232,9 +267,20 @@ class ChatWidget(QWidget):
         buttons_lay.addWidget(self.btn_clear)
         buttons_lay.addStretch()
 
-        # Status
-        self.status = QLabel("Prêt.")
-        self.status.setStyleSheet(f"color: {COLORS['ok']}; font-size: 11px;")
+        # Status avec spinner
+        status_lay = QHBoxLayout()
+        self.status = QLabel("✓ Prêt")
+        self.status.setStyleSheet(f"color: {COLORS['ok']}; font-size: 11px; font-weight: bold;")
+        self.spinner_label = QLabel()
+        self.spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        self.spinner_idx = 0
+        status_lay.addWidget(self.status)
+        status_lay.addWidget(self.spinner_label)
+        status_lay.addStretch()
+
+        # Timer pour spinner
+        self.spinner_timer = QTimer()
+        self.spinner_timer.timeout.connect(self._update_spinner)
 
         # Layout
         lay = QVBoxLayout(self)
@@ -243,40 +289,138 @@ class ChatWidget(QWidget):
         lay.addWidget(self.history, 3)
         lay.addWidget(self.input, 1)
         lay.addLayout(buttons_lay)
-        lay.addWidget(self.status)
+        lay.addLayout(status_lay)
 
         # Connexions
         self.btn_send.clicked.connect(self.on_send)
-        self.btn_clear.clicked.connect(self.history.clear)
-        self.input.installEventFilter(self)
+        self.btn_clear.clicked.connect(self.clear_all)
 
-    def eventFilter(self, obj, evt):
-        if obj is self.input and evt.type() == 10:  # KeyPress
-            if evt.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                if evt.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier):
-                    self.on_send()
-                    return True
-        return super().eventFilter(obj, evt)
+    def clear_all(self):
+        """Effacer l'historique et la mémoire"""
+        self.history.clear()
+        self.messages = []  # Réinitialiser la mémoire du contexte
+
+    def save_history(self):
+        """Sauvegarder l'historique dans un fichier JSON"""
+        try:
+            import json
+            from pathlib import Path
+            filepath = Path("data") / "chat_history.json"
+            filepath.parent.mkdir(exist_ok=True)
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(self.messages, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            pass  # Silencieusement ignorer les erreurs de sauvegarde
+
+    def load_history(self):
+        """Charger l'historique depuis un fichier JSON"""
+        try:
+            import json
+            from pathlib import Path
+            filepath = Path("data") / "chat_history.json"
+            if filepath.exists():
+                with open(filepath, "r", encoding="utf-8") as f:
+                    self.messages = json.load(f)
+                # Afficher les messages chargés
+                for msg in self.messages:
+                    self.add_message(msg["role"], msg["content"])
+        except Exception as e:
+            pass  # Silencieusement ignorer les erreurs de chargement
+
+
+    def _update_spinner(self):
+
+        """Animer le spinner"""
+        frame = self.spinner_frames[self.spinner_idx % len(self.spinner_frames)]
+        self.spinner_label.setText(frame)
+        self.spinner_idx += 1
+
+    def start_loading(self):
+        """Afficher spinner"""
+        self.status.setText("⏳ En attente...")
+        self.status.setStyleSheet(f"color: {COLORS['warn']}; font-size: 11px; font-weight: bold;")
+        self.spinner_idx = 0
+        self.spinner_timer.start(100)
+        self.btn_send.setEnabled(False)
+
+    def stop_loading(self):
+        """Arrêter spinner"""
+        self.spinner_timer.stop()
+        self.spinner_label.setText("")
+        self.btn_send.setEnabled(True)
 
     def on_send(self):
         msg = self.input.toPlainText().strip()
         if not msg:
             return
-        self.sendRequested.emit(msg)
-        self.input.clear()
+        self.input.clear()  # Vider d'abord
+        self.sendRequested.emit(msg)  # Puis émettre
+        self.start_loading()
 
-    def add_message(self, role: str, text: str, provider: str = "?", trace: dict = None):
-        """Ajouter message au historique"""
+    def get_context(self):
+        """Retourner l'historique complet des messages pour le contexte"""
+        return self.messages
+
+
+    def add_message(self, role: str, text: str, provider: str = "?", trace: dict | None = None):
+        """Ajouter message au historique avec timestamp"""
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%H:%M:%S")
+
+        # Stocker le message dans l'historique pour le contexte
+        self.messages.append({"role": role, "content": text})
+        self.save_history()  # Sauvegarder automatiquement
+
         if role == "user":
-            html = f"<div style='background: rgba(109,213,255,.12); padding: 10px; border-radius: 10px; margin: 8px 0; border-left: 3px solid {COLORS['acc']}'><b>Toi:</b><br>{text.replace(chr(10), '<br>')}</div>"
+            # Message utilisateur
+            html = f"""
+            <div style='
+                background: rgba(109,213,255,.12);
+                padding: 12px;
+                border-radius: 10px;
+                margin: 10px 0;
+                border-left: 4px solid {COLORS['acc']};
+            '>
+                <div style='color: {COLORS['acc']}; font-weight: bold; font-size: 12px; margin-bottom: 4px;'>
+                    👤 Vous <span style='color: {COLORS['muted']}; font-weight: normal;'>{timestamp}</span>
+                </div>
+                <div style='color: {COLORS['text']};'>{text.replace(chr(10), '<br>')}</div>
+            </div>
+            """
         else:
-            html = f"<div style='background: rgba(176,124,255,.08); padding: 10px; border-radius: 10px; margin: 8px 0; border-left: 3px solid {COLORS['acc2']}'><b>ÉlyonEU:</b><br>{text.replace(chr(10), '<br>')}"
+            # Message assistant
+            provider_emoji = "🤖"
+            provider_text = provider if provider != "?" else "local"
+
+            html = f"""
+            <div style='
+                background: rgba(176,124,255,.08);
+                padding: 12px;
+                border-radius: 10px;
+                margin: 10px 0;
+                border-left: 4px solid {COLORS['acc2']};
+            '>
+                <div style='color: {COLORS['acc2']}; font-weight: bold; font-size: 12px; margin-bottom: 6px;'>
+                    {provider_emoji} ÉlyonEU <span style='color: {COLORS['muted']}; font-weight: normal;'>{timestamp}</span>
+                </div>
+                <div style='color: {COLORS['text']}; line-height: 1.7;'>{text.replace(chr(10), '<br>')}</div>
+            """
+
             if trace:
-                lp = trace.get("local_provider", "?")
-                html += f"<br><span style='color: {COLORS['muted']}; font-size: 11px; margin-top: 4px; display: block;'>Provider: {lp}</span>"
+                provider_val = trace.get("local_provider", provider)
+                html += f"""
+                <div style='color: {COLORS['muted']}; font-size: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.05);'>
+                    Provider: <b>{provider_val}</b>
+                </div>
+                """
+
             html += "</div>"
 
         self.history.append(html)
+        # Auto-scroll vers le bas
+        cursor = self.history.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        self.history.setTextCursor(cursor)
         self.history.verticalScrollBar().setValue(self.history.verticalScrollBar().maximum())
 
 class MonitorWidget(QWidget):
@@ -396,9 +540,11 @@ class ElyonDesktopPremium(QMainWindow):
         self.setGeometry(100, 100, 1400, 900)
 
         # Stylesheet global
-        qapp = QApplication.instance()
-        qapp.setStyle('Fusion')
-        qapp.setStyleSheet(create_stylesheet())
+        from PySide6.QtWidgets import QApplication as QtWidgetsQApplication
+        qapp = QtWidgetsQApplication.instance()
+        if qapp and isinstance(qapp, QtWidgetsQApplication):
+            qapp.setStyle('Fusion')
+            qapp.setStyleSheet(create_stylesheet())
 
         # Setup UI
         self.setup_ui()
@@ -412,7 +558,12 @@ class ElyonDesktopPremium(QMainWindow):
         self.timer_state.timeout.connect(self.poll_state)
         self.timer_state.start(3000)
 
-        print("[desktop] Application started", flush=True)
+        # Poller pour la queue de réponses chat
+        self.timer_replies = QTimer()
+        self.timer_replies.timeout.connect(self.poll_chat_replies)
+        self.timer_replies.start(100)  # Vérifier chaque 100ms
+
+        print("[desktop] App started", flush=True)
 
     def setup_ui(self):
         """Construire l'interface"""
@@ -552,34 +703,39 @@ class ElyonDesktopPremium(QMainWindow):
     def on_chat_send(self, msg: str):
         """Traiter envoi chat"""
         self.panel_chat.add_message("user", msg)
-        self.panel_chat.status.setText("Envoi…")
+        self.panel_chat.status.setText("En attente...")
 
         # Lancer appel async
         def send_async():
             try:
-                payload = {"messages": [{"role": "user", "content": msg}]}
+                # Envoyer l'historique COMPLET pour le contexte (pas juste la dernière question)
+                context = self.panel_chat.get_context()
+                payload = {"messages": context}
                 resp = http_post("/chat", payload, timeout=20.0)
                 if resp:
                     reply = resp.get("reply", "(pas de réponse)")
                     provider = resp.get("provider", "?")
                     trace = resp.get("trace", {})
-                    QTimer.singleShot(0, lambda: self.on_chat_reply(reply, provider, trace))
+                    # Mettre dans la queue au lieu d'utiliser QTimer
+                    _reply_queue.put(("reply", reply, provider, trace))
                 else:
-                    QTimer.singleShot(0, lambda: self.on_chat_error("Erreur réseau"))
+                    _reply_queue.put(("error", "Erreur reseau"))
             except Exception as exc:
-                QTimer.singleShot(0, lambda: self.on_chat_error(str(exc)))
+                _reply_queue.put(("error", str(exc)))
 
         threading.Thread(target=send_async, daemon=True).start()
 
     def on_chat_reply(self, text: str, provider: str, trace: dict):
         """Réponse chat reçue"""
         self.panel_chat.add_message("assistant", text, provider, trace)
-        self.panel_chat.status.setText("Prêt.")
+        self.panel_chat.status.setText(f"OK ({provider})")
+        self.panel_chat.stop_loading()
 
     def on_chat_error(self, error: str):
         """Erreur chat"""
         self.panel_chat.status.setText(f"Erreur: {error}")
-        self.panel_chat.add_message("assistant", f"⚠️ Erreur: {error}")
+        self.panel_chat.add_message("assistant", f"Erreur: {error}")
+        self.panel_chat.stop_loading()
 
     def poll_events(self):
         """Poller les événements"""
@@ -593,6 +749,20 @@ class ElyonDesktopPremium(QMainWindow):
         self_data = http_get("/self")
         if self_data:
             QTimer.singleShot(0, lambda: self.panel_monitor.update_state({"self": self_data.get("self", {})}))
+
+    def poll_chat_replies(self):
+        """Vérifier la queue de réponses chat"""
+        try:
+            while True:
+                msg_type, *data = _reply_queue.get_nowait()
+                if msg_type == "reply":
+                    reply, provider, trace = data
+                    self.on_chat_reply(reply, provider, trace)
+                elif msg_type == "error":
+                    error = data[0]
+                    self.on_chat_error(error)
+        except queue.Empty:
+            pass
 
 def main():
     app = QApplication(sys.argv)

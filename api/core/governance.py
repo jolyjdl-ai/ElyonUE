@@ -227,8 +227,8 @@ class TerritorialGovernance:
 
         # 3. Vérifier les destinations externes
         if request.get("external_call"):
-            destination = request.get("destination")
-            if not self.access_control.check_external_request(destination, request.get("payload", {})):
+            destination = request.get("destination", "")
+            if destination and not self.access_control.check_external_request(destination, request.get("payload", {})):
                 return {
                     "allowed": False,
                     "reason": "External destination blocked",

@@ -178,15 +178,47 @@ class LocalGenerator:
             )
         if "qui es-tu" in low or "qui es tu" in low:
             return (
-                "Je suis ÉlyonEU, IA locale fonctionnant hors-cloud conformément à la gouvernance"
-                " 6S/6R. Je journalise en JSONL et assiste sur les procédures internes en toute"
-                " sobriété."
+                "Je suis ElyonEU, IA locale fonctionnant hors-cloud conformement a la gouvernance"
+                " 6S/6R. Je journalise en JSONL et assiste sur les procedures internes en toute"
+                " sobriete."
             )
         if "quelle est ta mission" in low:
             return (
-                "Ma mission est d’aider l’opérateur·ice à piloter les flux locaux tout en respectant"
-                " sûreté, souveraineté et responsabilité. Je fournis des conseils actionnables"
-                " basés sur les données internes disponibles."
+                "Ma mission est d'aider l'operateur a piloter les flux locaux tout en respectant"
+                " surete, souverainete et responsabilite. Je fournis des conseils actionnables"
+                " bases sur les donnees internes disponibles."
+            )
+
+        # Determiner si c'est un follow-up (multiple messages ou pronoms de contexte)
+        is_followup = len(ctx) > 1 or any(k in low for k in ["tu", "tu as", "tu peux", "tu dis", "vous", "rappelle", "contexte", "precedent", "avant"])
+        has_mission_context = any("mission" in c.lower() or "qui es" in c.lower() for c in ctx)
+
+        # Questions sur la mission
+        if "mission" in low:
+            if is_followup and not has_mission_context:
+                return (
+                    "Ma mission est d'aider l'operateur a piloter les flux locaux tout en respectant"
+                    " la gouvernance 6S/6R (Surete, Souverainete, Sobriete, Simplicite, Solidarite, Sens).\n\n"
+                    "Pour approfondir : tu peux me demander d'expliquer chaque principe, ou comment les appliquer concrètement."
+                )
+
+        # Questions sur les 6R
+        if any(k in low for k in ["6r", "six r", "raison", "richesse", "relation", "rythme", "resilience", "respect"]):
+            if is_followup and has_mission_context:
+                return (
+                    "Apres avoir compris les 6S (QUOI faire), les 6R definissent COMMENT le faire :\n"
+                    "- Raison : Clarifier l'intent strategique derriere chaque action\n"
+                    "- Richesse : Valoriser les contributions et competences locales\n"
+                    "- Relation : Favoriser la cooperation plutot que la competition\n"
+                    "- Rythme : Respecter les cadences naturelles et besoins du terrain\n"
+                    "- Resilience : Anticiper les crises et adapter les processus\n"
+                    "- Respect : Honorer l'autonomie et la dignite de chacun\n\n"
+                    "La combinaison 6S + 6R forme la gouvernance complete d'ElyonEU."
+                )
+            return (
+                "Les 6R complementent les 6S :\n"
+                "- Raison, Richesse, Relation, Rythme, Resilience, Respect\n"
+                "Ensemble, ils definissent la gouvernance ElyonEU complete."
             )
 
         template = [

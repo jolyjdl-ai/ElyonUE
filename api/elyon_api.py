@@ -80,9 +80,9 @@ try:
     governance_profiles.init_modules(territorial_gov, profile_mgr, ui_divine)
     app.include_router(governance_profiles.router, prefix="/v2")
 
-    print("[api] ✓ Gouvernance, profils et divine activés (Région Grand Est 6S/6R)", flush=True)
+    print("[api] OK Gouvernance, profils et divine activés (Région Grand Est 6S/6R)", flush=True)
 except Exception as exc:
-    print(f"[api] ⚠ Impossible d'initialiser gouvernance: {exc}", flush=True)# génération locale simplifiée (fallback)
+    print(f"[api] WARN Impossible d'initialiser gouvernance: {exc}", flush=True)# génération locale simplifiée (fallback)
 if TYPE_CHECKING:
     from app.providers.generative_core_provider import GenerativeCoreProvider  # type: ignore[import]
 
@@ -102,17 +102,54 @@ def ensure_gen_provider() -> Optional["GenerativeCoreProvider"]:
         return None
 
 # génération locale simplifiée (fallback)
-def local_generate(prompt: str, mode: str = "normal") -> tuple[str, str]:
+def local_generate(prompt: str, mode: str = "normal", context: list | None = None) -> tuple[str, str]:
     """Reponse intelligente locale avec support multi-mode et contexte educatif."""
+    context_list = context or []
+
+    # Extraire la vraie question du contexte (dernier message utilisateur)
+    last_user_msg = ""
+    for msg in reversed(context_list):
+        if isinstance(msg, dict) and msg.get("role") == "user":
+            last_user_msg = msg.get("content", "").lower()
+            break
+
     text = prompt.strip()
     if not text:
         return ("(mode local) Decris ta situation pour que je propose une prochaine etape alignee 6S/6R.", "gen_local")
 
-    low = text.lower()
-    
-    # Detection d'intentions courantes
-    if "mission" in low or "qui es-tu" in low or "c'est quoi" in low:
-        return (
+    low = last_user_msg if last_user_msg else text.lower()
+
+    # Analyser la conversation complète pour détecter les follow-ups
+    user_messages = [msg.get("content", "").lower() if isinstance(msg, dict) else "" for msg in context_list if (isinstance(msg, dict) and msg.get("role") == "user")]
+    all_context_lower = "\n".join(user_messages).lower()
+
+    has_mission_question = any(k in all_context_lower for k in ["mission", "qui es-tu", "qui es tu", "c'est quoi", "c'est quoi toi"])
+    is_asking_6r = any(k in low for k in ["6r", "six r", "raison", "richesse", "relation", "rythme", "resilience", "respect"])
+
+    # Detecter si c'est un suivi de conversation (plus de 1 message ou contexte antérieur)
+    is_followup = len(user_messages) > 1 or any(k in low for k in ["et ", "tu ", "vous ", "rappelle", "contexte", "precedent", "avant"])
+
+    # Questions sur les 6R - RÉPONDRE DIFFÉREMMENT SI C'EST UN SUIVI
+    if is_asking_6r:
+        base_response = (
+            "🔄 Les 6R Complementaires\n\n"
+            "Si les 6S definissent QUOI faire, les 6R definissent COMMENT le faire :\n"
+            "✓ Raison : Clarifier l'intent strategique derriere chaque action\n"
+            "✓ Richesse : Valoriser les contributions et competences locales\n"
+            "✓ Relation : Favoriser la cooperation plutôt que la competition\n"
+            "✓ Rythme : Respecter les cadences naturelles et besoins du terrain\n"
+            "✓ Resilience : Anticiper les crises et adapter les processus\n"
+            "✓ Respect : Honorer l'autonomie et la dignite de chacun"
+        )
+        if is_followup and has_mission_question:
+            # Suite naturelle après la mission - montrer la complémentarité
+            return ("Apres avoir compris les 6S (QUOI faire), voici les 6R qui definissent COMMENT :\n\n" + base_response + "\n\nLa combinaison 6S + 6R forme la gouvernance complete d'ElyonEU.", "gen_local")
+        else:
+            return (base_response, "gen_local")
+
+    # Detection d'intentions courantes (APRÈS les 6R !)
+    if "mission" in low or "qui es-tu" in low or "qui es tu" in low or "c'est quoi" in low:
+        base_response = (
             "🎯 Ma mission ElyonEU\n\n"
             "Je guide les operateurs vers des actions concretes, ancrées dans les principes 6S/6R :\n"
             "✓ Surete : Protéger les donnees et les personnes\n"
@@ -120,10 +157,13 @@ def local_generate(prompt: str, mode: str = "normal") -> tuple[str, str]:
             "✓ Sobriete : Efficacité maximale, ressources minimales\n"
             "✓ Simplicité : Actions claires et directes\n"
             "✓ Solidarite : Servir la communaute educative\n"
-            "✓ Sens : Clarifier l'intention avant l'action",
-            "gen_local",
+            "✓ Sens : Clarifier l'intention avant l'action"
         )
-    
+        if is_followup and is_asking_6r:
+            # L'utilisateur demande "et alors les 6R ?" après la mission
+            return (base_response + "\n\nPour approfondir : Tu peux me poser des questions sur chacun de ces principes, ou me demander comment les appliquer concrètement.", "gen_local")
+        return (base_response, "gen_local")
+
     if "aide" in low or "help" in low or "comment" in low or "fais quoi" in low:
         return (
             "🤝 Comment je peux t'aider\n\n"
@@ -134,7 +174,7 @@ def local_generate(prompt: str, mode: str = "normal") -> tuple[str, str]:
             "Remarque : Mode local = zero donnees sortantes, compliance 100% Region Grand Est",
             "gen_local",
         )
-    
+
     # Detection de mots-cles de domaine educatif
     if any(k in low for k in ["audit", "journal", "log", "compliance", "conformite"]):
         return (
@@ -147,7 +187,7 @@ def local_generate(prompt: str, mode: str = "normal") -> tuple[str, str]:
             "Pour voir l'etat complet, contacte Joeffrey (profil DIVINE).",
             "gen_local",
         )
-    
+
     if any(k in low for k in ["dlde", "delegue", "delegation", "region", "gouvernance"]):
         return (
             "🏛️ DLDE - Souverainete Region Grand Est\n\n"
@@ -159,7 +199,7 @@ def local_generate(prompt: str, mode: str = "normal") -> tuple[str, str]:
             "Besoin d'un role specifique ? Adresse-toi a l'administrateur.",
             "gen_local",
         )
-    
+
     if any(k in low for k in ["classe", "eleve", "ecole", "cours", "apprentissage", "pedagogie", "enseignant"]):
         return (
             "📚 Ressources Educatives\n\n"
@@ -171,7 +211,7 @@ def local_generate(prompt: str, mode: str = "normal") -> tuple[str, str]:
             "Pour plus de details, utilise le mode `actions`.",
             "gen_local",
         )
-    
+
     # Modes specialises
     if mode == "resume":
         summary = (
@@ -181,7 +221,7 @@ def local_generate(prompt: str, mode: str = "normal") -> tuple[str, str]:
             f"💡 Prochaine etape : Clarifier l'intention operationnelle"
         )
         return (summary, "gen_local")
-    
+
     elif mode == "actions":
         actions = (
             "🎯 Actions Recommandees\n\n"
@@ -197,8 +237,12 @@ def local_generate(prompt: str, mode: str = "normal") -> tuple[str, str]:
             "   → Trace immutable pour conformite"
         )
         return (actions, "gen_local")
-    
+
     else:  # mode == "normal"
+        text = prompt.strip()
+        low = text.lower()
+        print(f"[gen_local DEBUG] text='{text[:50]}', low='{low[:50]}'", flush=True)
+
         response = (
             f"🔍 Analyse Locale\n\n"
             f"Ta demande : {text[:150]}\n\n"
@@ -209,8 +253,6 @@ def local_generate(prompt: str, mode: str = "normal") -> tuple[str, str]:
             f"Recommandation : Precise davantage ton besoin pour une reponse plus ciblee ou utilise `mode=actions` pour des etapes concretes."
         )
         return (response, "gen_local")
-
-
 # Mount local routers (if present)
 try:
     from api.routers.generative import router as generative_router  # type: ignore[import]
@@ -427,9 +469,15 @@ def home():
 def ui_entrypoint():
     return home()
 
+
 @app.get("/health")
 def health():
+    global _startup_done
+    if not _startup_done:
+        start_producer_once()
+        _startup_done = True
     return {"status": "ok", "ts": time.time()}
+
 
 @app.get("/self")
 def self_state():
@@ -607,10 +655,17 @@ async def chat(req: Request):
             + enriched_msgs
         )
 
-        contextual_prompt = last_user or "Bonjour"
+        # Construire un prompt contextuel enrichi avec l'historique complet
+        conversation_history = "\n".join([
+            f"[{msg.get('role', '?').upper()}]: {msg.get('content', '')}"
+            for msg in enriched_msgs
+        ])
+
+        contextual_prompt = f"Historique de conversation:\n{conversation_history}\n\nDernier message utilisateur:\n{last_user or 'Bonjour'}"
+
         if summary_applied:
             contextual_prompt = (
-                "Contexte récent :\n" + memory_summary + "\n\nDemande utilisateur :\n" + (last_user or "Bonjour")
+                "Contexte récent :\n" + memory_summary + "\n\n" + contextual_prompt
             )
         if intent_applied:
             contextual_prompt += (
@@ -624,30 +679,25 @@ async def chat(req: Request):
             contextual_prompt += "\n\nConnaissances pertinentes :\n" + "\n".join(rag_lines)
 
         def run_local_generation() -> tuple[str, str]:
-            gen = ensure_gen_provider()
-            if gen is not None:
-                try:
-                    result = gen.generate(contextual_prompt, mode=mode)
-                    text = (result.text or "").strip()
-                    used_raw = str(getattr(result, "used", "local") or "local")
-                    used_lower = used_raw.lower()
-                    text_lower = text.lower()
-                    placeholder = text_lower.startswith("[cloud gpt") or "(vide" in text_lower
-                    if used_lower == "cloud" and (not text or placeholder):
-                        raise RuntimeError("fallback cloud vide ou non autorisé")
-                    if not text:
-                        raise RuntimeError("réponse vide du générateur interne")
-                    return text, f"gen_{used_lower or 'local'}"
-                except Exception as exc:
-                    print(f"[api] Générateur interne en erreur: {exc}", flush=True)
-            return local_generate(contextual_prompt, mode=mode)
+            # D'abord essayer llm_client (LM Studio)
+            try:
+                from app.services import llm_client
+                context_for_llm = [msg.get("content", "") for msg in enriched_msgs if msg.get("role") == "user"]
+                text, source = llm_client.generate(contextual_prompt, context_for_llm, prefer_cloud=False)
+                if text and len(text.strip()) > 0:
+                    return text.strip(), f"llm_{source}"
+            except Exception as exc:
+                print(f"[api] LLM Studio indisponible: {exc}", flush=True)
+            
+            # Fallback sur local_generate (templates)
+            return local_generate(contextual_prompt, mode=mode, context=enriched_msgs)
 
-        print("[api] [DEBUG 4] Génération locale...", flush=True)
+        print("[api] [DEBUG 4] Génération...", flush=True)
         try:
             reply, provider = run_local_generation()
         except Exception as exc:
             print(f"[api] Fallback vers local_generate: {exc}", flush=True)
-            reply, provider = local_generate(contextual_prompt, mode=mode)
+            reply, provider = local_generate(contextual_prompt, mode=mode, context=enriched_msgs)
         print(f"[api] [DEBUG 4] OK - provider={provider}, len={len(reply)}", flush=True)
 
         local_provider = provider
@@ -911,13 +961,13 @@ async def chat(req: Request):
                 return text, f"gen_{used_lower or 'local'}"
             except Exception as exc:
                 print(f"[api] Générateur interne en erreur: {exc}", flush=True)
-        return local_generate(contextual_prompt, mode=mode)
+        return local_generate(contextual_prompt, mode=mode, context=enriched_msgs)
 
     try:
         reply, provider = run_local_generation()
     except Exception as exc:
         print(f"[api] Fallback vers local_generate suite à l'erreur: {exc}", flush=True)
-        reply, provider = local_generate(contextual_prompt, mode=mode)
+        reply, provider = local_generate(contextual_prompt, mode=mode, context=enriched_msgs)
     local_provider = provider
     local_len = len(reply)
     log_event(
@@ -1039,9 +1089,13 @@ def producer():
         time.sleep(max(0.1, interval))
 
 
-@app.on_event("startup")
-async def on_startup():
-    start_producer_once()
+# Commenté temporairement pour debug
+# @app.on_event("startup")
+# async def on_startup():
+#     start_producer_once()
+
+# Startup manuel au premier appel
+_startup_done = False
 
 def main():
     import uvicorn

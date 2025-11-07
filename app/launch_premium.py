@@ -47,8 +47,14 @@ else:
 # Démarrer l'app desktop
 print("[launcher] Démarrage de l'application Premium...", flush=True)
 try:
-    from app.elyon_desktop_premium import main
-    main()
+    from elyon_desktop_premium import ElyonDesktopPremium
+    from PySide6.QtWidgets import QApplication
+    import sys
+
+    app = QApplication(sys.argv)
+    window = ElyonDesktopPremium()
+    window.show()
+    sys.exit(app.exec())
 except KeyboardInterrupt:
     print("\n[launcher] Arrêt demandé", flush=True)
 except Exception as exc:

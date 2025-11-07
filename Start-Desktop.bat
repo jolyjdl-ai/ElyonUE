@@ -1,5 +1,5 @@
 @echo off
-REM Lanceur ÉlyonEU Desktop Premium - Windows Batch
+REM Lanceur ÉlyonEU Desktop Premium - Windows Batch (Orchestré)
 setlocal enabledelayedexpansion
 
 echo ╔════════════════════════════════════════╗
@@ -17,19 +17,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Démarrer l'API en arrière-plan (version UTF-8)
+REM Lancer le lanceur complet (API + Desktop)
 echo.
-echo [1/2] Démarrage de l'API sur http://127.0.0.1:8000...
-start "ÉlyonEU API" python run_api_utf8.py >nul 2>nul
+echo Lancement du système complet (API + Application)...
+echo.
+python launch_complete.py
 
-REM Attendre que l'API démarre
-timeout /t 4 /nobreak >nul
-
-REM Démarrer l'app desktop
-echo [2/2] Lancement de l'application desktop...
-python test_app.py
-
-REM Si l'app se ferme, faire un pause
+echo.
 pause
 
 exit /b 0
